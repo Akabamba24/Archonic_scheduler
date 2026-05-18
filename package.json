@@ -1,0 +1,22 @@
+{
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "dev:api": "node server/index.js",
+    "dev:full": "concurrently \"npm run dev:api\" \"npm run dev -- --port 5173\"",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "latest",
+    "concurrently": "latest",
+    "cors": "latest",
+    "dotenv": "latest",
+    "express": "latest",
+    "vite": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "lucide-react": "latest"
+  },
+  "type": "module",
+  "devDependencies": {}
+}
