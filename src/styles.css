@@ -30,6 +30,18 @@ button {
   cursor: pointer;
 }
 
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 3px solid rgba(36, 120, 107, 0.34);
+  outline-offset: 2px;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
 .app-shell {
   min-height: 100vh;
   padding: 26px;
@@ -145,6 +157,12 @@ h3 {
 .small-action:hover {
   border-color: #98cabb;
   transform: translateY(-1px);
+}
+
+.icon-button:active,
+.filter-button:active,
+.small-action:active {
+  transform: translateY(1px);
 }
 
 .icon-button {
@@ -345,6 +363,10 @@ h3 {
 .demo-button:hover {
   background: rgba(255, 255, 255, 0.16);
   border-color: rgba(255, 255, 255, 0.34);
+}
+
+.demo-button:active {
+  transform: translateY(1px);
 }
 
 .demo-button.reset {
@@ -690,6 +712,10 @@ select:focus {
 
 .primary-action:hover {
   background: linear-gradient(135deg, #2f8a7c, #176858);
+}
+
+.primary-action:active {
+  transform: translateY(1px);
 }
 
 .metric-row {
@@ -1206,6 +1232,25 @@ select:focus {
 
   .topbar {
     align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .brand-lockup {
+    align-items: flex-start;
+  }
+
+  .brand-mark {
+    height: 46px;
+    width: 46px;
+  }
+
+  .topbar-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .topbar-badge {
+    margin-right: auto;
   }
 
   .workspace-grid {
