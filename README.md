@@ -38,3 +38,19 @@ Open:
 Copy `.env.example` to `.env` when you are ready to test live SMS/email.
 
 Demo mode works without credentials.
+
+## Production Notes
+
+The Express server can serve the production Vite build:
+
+```bash
+npm run build
+npm start
+```
+
+For a real production launch, replace the local JSON store with a managed database and add dashboard authentication.
+
+See:
+
+- `docs/PRODUCTION_READINESS.md`
+- `docs/AI_INTEGRATION_MAP.md`

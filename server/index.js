@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import "dotenv/config";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,16 +10,43 @@ import { fileURLToPath } from "node:url";
 const app = express();
 const port = Number(process.env.PORT || 8787);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const storePath = path.join(__dirname, "data", "store.json");
+const projectRoot = path.join(__dirname, "..");
+const dataDir = process.env.DATA_DIR
+  ? path.resolve(projectRoot, process.env.DATA_DIR)
+  : path.join(__dirname, "data");
+const storePath = path.join(dataDir, "store.json");
+const distPath = path.join(projectRoot, "dist");
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.CLIENT_ORIGIN || "http://127.0.0.1:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || "http://127.0.0.1:5173" }));
-app.use(express.json());
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(new Error("Origin is not allowed by CORS."));
+    }
+  })
+);
+app.use(
+  rateLimit({
+    windowMs: Number(process.env.API_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000),
+    max: Number(process.env.API_RATE_LIMIT_MAX || 300),
+    standardHeaders: true,
+    legacyHeaders: false
+  })
+);
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, service: "tradeflow-api" });
 });
 
-app.get("/api/companies", async (_req, res) => {
+app.get("/api/companies", asyncHandler(async (_req, res) => {
   const store = await readStore();
   res.json({
     ok: true,
@@ -29,30 +58,31 @@ app.get("/api/companies", async (_req, res) => {
       dispatchPhone
     }))
   });
-});
+}));
 
-app.get("/api/companies/:slug", async (req, res) => {
+app.get("/api/companies/:slug", asyncHandler(async (req, res) => {
   const store = await readStore();
   const company = findCompany(store, req.params.slug);
   if (!company) {
     return res.status(404).json({ ok: false, error: "Company not found." });
   }
   res.json({ ok: true, company });
-});
+}));
 
-app.patch("/api/companies/:slug", async (req, res) => {
+app.patch("/api/companies/:slug", asyncHandler(async (req, res) => {
   const store = await readStore();
   const company = findCompany(store, req.params.slug);
   if (!company) {
     return res.status(404).json({ ok: false, error: "Company not found." });
   }
 
-  Object.assign(company, pickCompanyUpdates(req.body || {}));
+  const updates = validateCompanyUpdates(req.body || {});
+  Object.assign(company, updates);
   await writeStore(store);
   res.json({ ok: true, company });
-});
+}));
 
-app.post("/api/companies/:slug/bookings", async (req, res) => {
+app.post("/api/companies/:slug/bookings", asyncHandler(async (req, res) => {
   const store = await readStore();
   const company = findCompany(store, req.params.slug);
   if (!company) {
@@ -60,16 +90,16 @@ app.post("/api/companies/:slug/bookings", async (req, res) => {
   }
 
   const booking = {
-    ...req.body,
-    id: req.body?.id || nextBookingId(company),
+    ...validateBooking(req.body || {}),
+    id: nextBookingId(company),
     createdAt: new Date().toISOString()
   };
   company.bookings = [booking, ...(company.bookings || [])];
   await writeStore(store);
   res.status(201).json({ ok: true, booking, company });
-});
+}));
 
-app.patch("/api/companies/:slug/bookings/:id", async (req, res) => {
+app.patch("/api/companies/:slug/bookings/:id", asyncHandler(async (req, res) => {
   const store = await readStore();
   const company = findCompany(store, req.params.slug);
   if (!company) {
@@ -81,12 +111,12 @@ app.patch("/api/companies/:slug/bookings/:id", async (req, res) => {
     return res.status(404).json({ ok: false, error: "Booking not found." });
   }
 
-  Object.assign(booking, req.body || {});
+  Object.assign(booking, validateBookingUpdate(req.body || {}));
   await writeStore(store);
   res.json({ ok: true, booking, company });
-});
+}));
 
-app.post("/api/confirmations/send", async (req, res) => {
+app.post("/api/confirmations/send", asyncHandler(async (req, res) => {
   const { booking, communications } = req.body || {};
 
   if (!booking || !communications) {
@@ -152,7 +182,7 @@ app.post("/api/confirmations/send", async (req, res) => {
       error: error.message || "Provider delivery failed."
     });
   }
-});
+}));
 
 function buildConfirmationMessage(booking) {
   return [
@@ -229,9 +259,33 @@ async function sendEmail({ to, subject, text }) {
   return { id: response.headers.get("x-message-id") || "sendgrid-accepted" };
 }
 
+app.use(express.static(distPath));
+app.use((req, res, next) => {
+  if (req.path.startsWith("/api")) return next();
+  return res.sendFile(path.join(distPath, "index.html"));
+});
+
+app.use((error, _req, res, _next) => {
+  const status = error.status || 500;
+  res.status(status).json({
+    ok: false,
+    error: status === 500 ? "Unexpected server error." : error.message
+  });
+});
+
 app.listen(port, () => {
   console.log(`TradeFlow API listening on http://127.0.0.1:${port}`);
 });
+
+function asyncHandler(handler) {
+  return (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
+}
+
+function badRequest(message) {
+  const error = new Error(message);
+  error.status = 400;
+  return error;
+}
 
 async function readStore() {
   try {
@@ -266,6 +320,119 @@ function pickCompanyUpdates(body) {
     "bookings"
   ];
   return Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)));
+}
+
+function validateCompanyUpdates(body) {
+  const updates = pickCompanyUpdates(body);
+  if (updates.slug && !/^[a-z0-9-]{3,60}$/.test(updates.slug)) {
+    throw badRequest("Company slug must be 3-60 lowercase letters, numbers, or dashes.");
+  }
+  if (updates.name !== undefined) updates.name = cleanText(updates.name, "Company name", 80);
+  if (updates.serviceArea !== undefined) updates.serviceArea = cleanText(updates.serviceArea, "Service area", 120);
+  if (updates.dispatchPhone !== undefined) updates.dispatchPhone = cleanText(updates.dispatchPhone, "Dispatch phone", 40);
+  if (updates.enabledTrades !== undefined && !Array.isArray(updates.enabledTrades)) {
+    throw badRequest("Enabled trades must be an array.");
+  }
+  if (updates.crews !== undefined && !Array.isArray(updates.crews)) {
+    throw badRequest("Crews must be an array.");
+  }
+  if (updates.bookings !== undefined && !Array.isArray(updates.bookings)) {
+    throw badRequest("Bookings must be an array.");
+  }
+  if (updates.serviceCatalog !== undefined && typeof updates.serviceCatalog !== "object") {
+    throw badRequest("Service catalog must be an object.");
+  }
+  return updates;
+}
+
+function validateBooking(body) {
+  const booking = {
+    name: cleanText(body.name || "New customer", "Customer name", 80),
+    trade: cleanText(body.trade || "Needs classification", "Trade", 60),
+    service: cleanText(body.service || "Customer-described request", "Service", 100),
+    window: cleanText(body.window || "Company will confirm", "Window", 80),
+    price: cleanNumber(body.price, "Price"),
+    paid: cleanText(body.paid || "No payment due", "Payment status", 80),
+    distance: cleanNumber(body.distance, "Distance"),
+    crew: cleanText(body.crew || "Dispatcher review", "Crew", 80),
+    lead: cleanText(body.lead || "Office team", "Lead", 80),
+    address: cleanText(body.address || "", "Address", 160, false),
+    phone: cleanText(body.phone || "", "Phone", 40, false),
+    email: cleanEmail(body.email || ""),
+    photos: Array.isArray(body.photos) ? body.photos.slice(0, 8) : [],
+    notes: cleanText(body.notes || "", "Notes", 1000, false),
+    contact: cleanText(body.contact || "SMS + email queued", "Contact status", 80),
+    status: cleanStatus(body.status || "New"),
+    priority: cleanText(body.priority || "Normal", "Priority", 40)
+  };
+
+  if (!booking.phone && !booking.email) {
+    throw badRequest("A phone number or email is required.");
+  }
+  if (!booking.notes && booking.trade === "Needs classification") {
+    throw badRequest("A description is required when no trade is selected.");
+  }
+  return booking;
+}
+
+function validateBookingUpdate(body) {
+  const allowed = [
+    "name",
+    "trade",
+    "service",
+    "window",
+    "price",
+    "paid",
+    "distance",
+    "crew",
+    "lead",
+    "address",
+    "phone",
+    "email",
+    "photos",
+    "notes",
+    "contact",
+    "status",
+    "priority"
+  ];
+  const updates = Object.fromEntries(Object.entries(body).filter(([key]) => allowed.includes(key)));
+  if (updates.status !== undefined) updates.status = cleanStatus(updates.status);
+  if (updates.email !== undefined) updates.email = cleanEmail(updates.email);
+  if (updates.price !== undefined) updates.price = cleanNumber(updates.price, "Price");
+  if (updates.distance !== undefined) updates.distance = cleanNumber(updates.distance, "Distance");
+  for (const key of ["name", "trade", "service", "window", "paid", "crew", "lead", "address", "phone", "notes", "contact", "priority"]) {
+    if (updates[key] !== undefined) updates[key] = cleanText(updates[key], key, key === "notes" ? 1000 : 160, false);
+  }
+  if (updates.photos !== undefined && !Array.isArray(updates.photos)) {
+    throw badRequest("Photos must be an array.");
+  }
+  return updates;
+}
+
+function cleanText(value, label, maxLength, required = true) {
+  const text = String(value ?? "").trim();
+  if (required && !text) throw badRequest(`${label} is required.`);
+  if (text.length > maxLength) throw badRequest(`${label} must be ${maxLength} characters or fewer.`);
+  return text;
+}
+
+function cleanEmail(value) {
+  const email = String(value || "").trim();
+  if (!email) return "";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw badRequest("Email address is invalid.");
+  return email;
+}
+
+function cleanNumber(value, label) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number < 0) throw badRequest(`${label} must be a positive number.`);
+  return number;
+}
+
+function cleanStatus(status) {
+  const allowed = ["New", "Confirmed", "Needs photos", "Dispatched", "Completed"];
+  if (!allowed.includes(status)) throw badRequest("Booking status is invalid.");
+  return status;
 }
 
 function nextBookingId(company) {
