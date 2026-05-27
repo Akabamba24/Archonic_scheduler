@@ -116,6 +116,25 @@ app.patch("/api/companies/:slug/bookings/:id", asyncHandler(async (req, res) => 
   res.json({ ok: true, booking, company });
 }));
 
+app.post("/api/ai/classify-request", asyncHandler(async (req, res) => {
+  const store = await readStore();
+  const company = findCompany(store, req.body?.companySlug || req.params.slug);
+  if (!company) {
+    return res.status(404).json({ ok: false, error: "Company not found." });
+  }
+
+  const payload = validateClassificationRequest(req.body || {});
+  const suggestion = process.env.OPENAI_API_KEY
+    ? await classifyWithOpenAI(company, payload)
+    : classifyWithDemoRules(company, payload);
+
+  res.json({
+    ok: true,
+    mode: process.env.OPENAI_API_KEY ? "OpenAI" : "Demo rules",
+    suggestion
+  });
+}));
+
 app.post("/api/confirmations/send", asyncHandler(async (req, res) => {
   const { booking, communications } = req.body || {};
 
@@ -191,6 +210,163 @@ function buildConfirmationMessage(booking) {
     `Crew: ${booking.crew}.`,
     `Estimated price: ${booking.price === 0 ? "Free quote" : `$${booking.price}`}.`
   ].join(" ");
+}
+
+function validateClassificationRequest(body) {
+  return {
+    companySlug: cleanText(body.companySlug || "", "Company slug", 80),
+    description: cleanText(body.description || "", "Description", 1200),
+    selectedTrade: cleanText(body.selectedTrade || "", "Selected trade", 60, false),
+    selectedService: cleanText(body.selectedService || "", "Selected service", 100, false),
+    photos: Array.isArray(body.photos)
+      ? body.photos.slice(0, 8).map((photo) => ({
+          name: cleanText(photo?.name || "Uploaded photo", "Photo name", 120, false)
+        }))
+      : []
+  };
+}
+
+function classifyWithDemoRules(company, payload) {
+  const text = `${payload.description} ${payload.selectedTrade} ${payload.selectedService}`.toLowerCase();
+  const tradeScores = {
+    HVAC: scoreText(text, ["ac", "air", "cool", "heat", "furnace", "thermostat", "unit", "vent", "compressor"]),
+    Electrical: scoreText(text, ["breaker", "outlet", "switch", "light", "buzz", "spark", "panel", "power", "electric"]),
+    Roofing: scoreText(text, ["roof", "leak", "shingle", "storm", "water", "ceiling", "drip", "gutter", "rain"])
+  };
+  const enabled = company.enabledTrades?.length ? company.enabledTrades : Object.keys(tradeScores);
+  const suggestedTrade = enabled
+    .map((trade) => ({ trade, score: tradeScores[trade] || 0 }))
+    .sort((a, b) => b.score - a.score)[0]?.trade || "Needs classification";
+  const suggestedService = chooseService(company, suggestedTrade, text);
+  const urgency = inferUrgency(text);
+  const confidence = Math.min(0.92, Math.max(0.48, (tradeScores[suggestedTrade] || 1) / 6 + 0.45));
+
+  return {
+    suggestedTrade,
+    suggestedService,
+    urgency,
+    confidence: Number(confidence.toFixed(2)),
+    dispatcherNotes: buildDispatcherNotes(suggestedTrade, suggestedService, urgency, payload),
+    followUpQuestions: buildFollowUpQuestions(suggestedTrade, text),
+    source: "demo-rules"
+  };
+}
+
+async function classifyWithOpenAI(company, payload) {
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      input: [
+        {
+          role: "system",
+          content:
+            "Classify home-service requests for a dispatcher. Suggest, do not diagnose. Use only services the company offers when possible."
+        },
+        {
+          role: "user",
+          content: JSON.stringify({
+            company: {
+              name: company.name,
+              enabledTrades: company.enabledTrades,
+              services: summarizeServices(company.serviceCatalog)
+            },
+            request: payload
+          })
+        }
+      ],
+      text: {
+        format: {
+          type: "json_schema",
+          name: "service_request_classification",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              suggestedTrade: { type: "string" },
+              suggestedService: { type: "string" },
+              urgency: { type: "string", enum: ["Low", "Normal", "High", "Urgent"] },
+              confidence: { type: "number" },
+              dispatcherNotes: { type: "string" },
+              followUpQuestions: { type: "array", items: { type: "string" } },
+              source: { type: "string" }
+            },
+            required: [
+              "suggestedTrade",
+              "suggestedService",
+              "urgency",
+              "confidence",
+              "dispatcherNotes",
+              "followUpQuestions",
+              "source"
+            ]
+          }
+        }
+      }
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw badRequest(data.error?.message || "AI classification failed.");
+  }
+  const text = data.output_text || data.output?.flatMap((item) => item.content || []).find((item) => item.text)?.text;
+  if (!text) throw badRequest("AI classification returned no text.");
+  return { ...JSON.parse(text), source: "openai" };
+}
+
+function scoreText(text, words) {
+  return words.reduce((score, word) => score + (text.includes(word) ? 1 : 0), 0);
+}
+
+function chooseService(company, trade, text) {
+  const services = company.serviceCatalog?.[trade]?.items || [];
+  if (!services.length) return "Customer-described request";
+  const scored = services.map((service) => ({
+    name: service.name,
+    score: service.name.toLowerCase().split(/\W+/).filter((word) => word && text.includes(word)).length
+  }));
+  scored.sort((a, b) => b.score - a.score);
+  return scored[0]?.score ? scored[0].name : services[0].name;
+}
+
+function inferUrgency(text) {
+  if (/(spark|smoke|burn|fire|active leak|flood|no heat|no cooling|danger)/.test(text)) return "Urgent";
+  if (/(leak|drip|breaker|tripping|storm|not cooling|not working)/.test(text)) return "High";
+  if (/(quote|estimate|inspection|tune)/.test(text)) return "Normal";
+  return "Normal";
+}
+
+function buildDispatcherNotes(trade, service, urgency, payload) {
+  const photoNote = payload.photos.length ? ` Customer uploaded ${payload.photos.length} photo(s).` : "";
+  return `AI suggests ${trade} / ${service} with ${urgency.toLowerCase()} urgency. Review before dispatch.${photoNote}`;
+}
+
+function buildFollowUpQuestions(trade, text) {
+  if (trade === "Roofing") {
+    return ["Is water actively dripping right now?", "Can you upload a photo of the ceiling stain or roof area?"];
+  }
+  if (trade === "Electrical") {
+    return ["Do you smell burning or see sparks?", "Which breaker, outlet, or room is affected?"];
+  }
+  if (trade === "HVAC") {
+    return ["Is the system turning on at all?", "What temperature is showing on the thermostat?"];
+  }
+  return ["When did the issue start?", "Can you add a photo or short video?"];
+}
+
+function summarizeServices(catalog) {
+  return Object.fromEntries(
+    Object.entries(catalog || {}).map(([trade, config]) => [
+      trade,
+      (config.items || []).map((item) => item.name)
+    ])
+  );
 }
 
 function getMissingLiveConfig() {
@@ -360,6 +536,7 @@ function validateBooking(body) {
     phone: cleanText(body.phone || "", "Phone", 40, false),
     email: cleanEmail(body.email || ""),
     photos: Array.isArray(body.photos) ? body.photos.slice(0, 8) : [],
+    aiSuggestion: body.aiSuggestion && typeof body.aiSuggestion === "object" ? body.aiSuggestion : null,
     notes: cleanText(body.notes || "", "Notes", 1000, false),
     contact: cleanText(body.contact || "SMS + email queued", "Contact status", 80),
     status: cleanStatus(body.status || "New"),
@@ -390,6 +567,7 @@ function validateBookingUpdate(body) {
     "phone",
     "email",
     "photos",
+    "aiSuggestion",
     "notes",
     "contact",
     "status",

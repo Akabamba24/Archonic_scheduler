@@ -105,9 +105,9 @@ Examples:
 - "Draft a reschedule message for Maya."
 - "Summarize today's revenue and open jobs."
 
-## Recommended First AI Feature
+## Implemented First AI Feature
 
-Start with **Customer Intake Classifier**.
+The first AI feature is **Customer Intake Classifier**.
 
 It fits the current product best because the app already supports:
 - No required trade selection
@@ -119,11 +119,19 @@ It fits the current product best because the app already supports:
 
 ## Implementation Shape
 
-Add a backend endpoint:
+Backend endpoint:
 
 ```txt
 POST /api/ai/classify-request
 ```
+
+Current behavior:
+
+- Uses demo rules when `OPENAI_API_KEY` is not set.
+- Uses the OpenAI Responses API with Structured Outputs when `OPENAI_API_KEY` is set.
+- Returns suggested trade, service, urgency, confidence, dispatcher notes, and follow-up questions.
+- Lets the customer apply the suggestion before scheduling.
+- Saves the AI suggestion into the work order for dispatcher review.
 
 Request:
 

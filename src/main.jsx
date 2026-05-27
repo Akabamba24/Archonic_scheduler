@@ -306,6 +306,9 @@ function App() {
   const [selectedBookingId, setSelectedBookingId] = useState(activeCompany.bookings[0]?.id || "");
   const [deliveryStatus, setDeliveryStatus] = useState("");
   const [persistenceStatus, setPersistenceStatus] = useState("Local API storage ready");
+  const [aiStatus, setAiStatus] = useState("");
+  const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const [openHeaderPanel, setOpenHeaderPanel] = useState("");
   const [customer, setCustomer] = useState({
     name: "Jordan Rivera",
@@ -373,6 +376,53 @@ function App() {
     setServiceName(serviceCatalog[nextTrade].items[0]?.name || "Other");
   }
 
+  function applyAiSuggestion(suggestion = aiSuggestion) {
+    if (!suggestion) return;
+    if (enabledTrades.includes(suggestion.suggestedTrade)) {
+      setTrade(suggestion.suggestedTrade);
+      const services = serviceCatalog[suggestion.suggestedTrade]?.items || [];
+      const matchingService = services.find((item) => item.name === suggestion.suggestedService);
+      setServiceName(matchingService?.name || services[0]?.name || "Other");
+    }
+    setCustomServiceDescription((current) =>
+      current.includes(suggestion.dispatcherNotes)
+        ? current
+        : `${current.trim()}\n\nAI note: ${suggestion.dispatcherNotes}`.trim()
+    );
+  }
+
+  async function classifyRequest() {
+    if (!customServiceDescription.trim()) {
+      setAiStatus("Add a short description first so AI has something to classify.");
+      return;
+    }
+    setAiLoading(true);
+    setAiStatus("Classifying request...");
+    try {
+      const response = await fetch("/api/ai/classify-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companySlug: activeCompany.slug,
+          description: customServiceDescription,
+          selectedTrade: trade,
+          selectedService: serviceName,
+          photos: uploadedPhotos.map((photo) => ({ name: photo.name }))
+        })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "AI classification failed.");
+      }
+      setAiSuggestion(result.suggestion);
+      setAiStatus(`AI suggestion ready (${result.mode}).`);
+    } catch (error) {
+      setAiStatus(error.message);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   function applyPreset(nextPreset) {
     const nextTrades = companyPresets[nextPreset];
     setPreset(nextPreset);
@@ -428,6 +478,7 @@ function App() {
       phone: customer.phone,
       email: customer.email,
       photos: uploadedPhotos,
+      aiSuggestion,
       notes:
         !hasSelectedTrade || serviceName === "Other"
           ? customServiceDescription || "Customer selected other but did not add details yet."
@@ -442,6 +493,8 @@ function App() {
     setBookings([optimisticBooking, ...bookings]);
     setSelectedBookingId(optimisticBooking.id);
     setUploadedPhotos([]);
+    setAiSuggestion(null);
+    setAiStatus("");
     try {
       const response = await fetch(`/api/companies/${activeCompany.slug}/bookings`, {
         method: "POST",
@@ -485,6 +538,8 @@ function App() {
     setServiceName(scenario.service);
     setCustomServiceDescription(scenario.description);
     setUploadedPhotos([]);
+    setAiSuggestion(null);
+    setAiStatus("");
   }
 
   async function loadCompanyFromApi(slug) {
@@ -517,6 +572,8 @@ function App() {
     setCustomServiceDescription("");
     setUploadedPhotos([]);
     setDeliveryStatus("");
+    setAiSuggestion(null);
+    setAiStatus("");
   }
 
   function navigateTo(path) {
@@ -562,6 +619,8 @@ function App() {
     setCustomServiceDescription("");
     setUploadedPhotos([]);
     setDeliveryStatus("");
+    setAiSuggestion(null);
+    setAiStatus("");
   }
 
   function updateBooking(id, updates) {
@@ -920,14 +979,53 @@ function App() {
           )}
 
           {(!hasSelectedTrade || serviceName === "Other") && (
-            <label className="field-label">
-              Describe the job
-              <textarea
-                value={customServiceDescription}
-                onChange={(event) => setCustomServiceDescription(event.target.value)}
-                placeholder="Tell us what is happening, where it is happening, and how urgent it feels."
-              />
-            </label>
+            <div className="ai-intake-block">
+              <label className="field-label">
+                Describe the job
+                <textarea
+                  value={customServiceDescription}
+                  onChange={(event) => setCustomServiceDescription(event.target.value)}
+                  placeholder="Tell us what is happening, where it is happening, and how urgent it feels."
+                />
+              </label>
+              <div className="ai-intake-actions">
+                <button className="small-action ai-action" onClick={classifyRequest} disabled={aiLoading}>
+                  <ShieldCheck size={16} />
+                  {aiLoading ? "Classifying..." : "AI classify request"}
+                </button>
+                {aiStatus && <span>{aiStatus}</span>}
+              </div>
+              {aiSuggestion && (
+                <div className="ai-suggestion-card">
+                  <div>
+                    <span>Suggested trade</span>
+                    <strong>{aiSuggestion.suggestedTrade}</strong>
+                  </div>
+                  <div>
+                    <span>Suggested service</span>
+                    <strong>{aiSuggestion.suggestedService}</strong>
+                  </div>
+                  <div>
+                    <span>Urgency</span>
+                    <strong>{aiSuggestion.urgency}</strong>
+                  </div>
+                  <div>
+                    <span>Confidence</span>
+                    <strong>{Math.round(aiSuggestion.confidence * 100)}%</strong>
+                  </div>
+                  <p>{aiSuggestion.dispatcherNotes}</p>
+                  <ul>
+                    {aiSuggestion.followUpQuestions.map((question) => (
+                      <li key={question}>{question}</li>
+                    ))}
+                  </ul>
+                  <button className="small-action" onClick={() => applyAiSuggestion()}>
+                    <Check size={16} />
+                    Apply suggestion
+                  </button>
+                </div>
+              )}
+            </div>
           )}
 
           <div className="two-col">
@@ -1338,6 +1436,17 @@ function App() {
                 <span>Dispatcher notes</span>
                 <p>{selectedBooking.notes}</p>
               </div>
+
+              {selectedBooking.aiSuggestion && (
+                <div className="notes-box">
+                  <span>AI intake suggestion</span>
+                  <p>
+                    {selectedBooking.aiSuggestion.suggestedTrade} / {selectedBooking.aiSuggestion.suggestedService}
+                    {" "}with {selectedBooking.aiSuggestion.urgency?.toLowerCase()} urgency.
+                  </p>
+                  <p>{selectedBooking.aiSuggestion.dispatcherNotes}</p>
+                </div>
+              )}
 
               <div className="notes-box">
                 <span>Customer photos</span>
