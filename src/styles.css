@@ -2,7 +2,9 @@
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #17211f;
-  background: #f4f2ec;
+  background:
+    linear-gradient(135deg, rgba(36, 120, 107, 0.08), rgba(139, 95, 19, 0.06) 42%, rgba(255, 255, 255, 0) 72%),
+    #f5f3ee;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -30,16 +32,42 @@ button {
 
 .app-shell {
   min-height: 100vh;
-  padding: 24px;
+  padding: 26px;
 }
 
 .topbar {
   align-items: center;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(215, 221, 216, 0.9);
+  border-radius: 8px;
+  box-shadow: 0 18px 60px rgba(42, 50, 46, 0.1);
   display: flex;
   gap: 20px;
   justify-content: space-between;
-  margin: 0 auto 20px;
+  margin: 0 auto 18px;
   max-width: 1440px;
+  padding: 18px;
+}
+
+.brand-lockup {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.brand-mark {
+  align-items: center;
+  background: #1d2b28;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 12px 24px rgba(29, 43, 40, 0.2);
+  color: #f8d47a;
+  display: flex;
+  flex: 0 0 auto;
+  height: 54px;
+  justify-content: center;
+  width: 54px;
 }
 
 .eyebrow {
@@ -59,9 +87,9 @@ p {
 }
 
 h1 {
-  font-size: clamp(1.7rem, 3vw, 2.65rem);
+  font-size: clamp(1.55rem, 2.6vw, 2.35rem);
   line-height: 1.05;
-  max-width: 780px;
+  max-width: 720px;
 }
 
 h2 {
@@ -91,6 +119,17 @@ h3 {
   gap: 8px;
 }
 
+.topbar-badge {
+  background: #fff5d6;
+  border: 1px solid #e6c56b;
+  border-radius: 999px;
+  color: #6c4b11;
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 8px 10px;
+  white-space: nowrap;
+}
+
 .icon-button,
 .filter-button,
 .small-action {
@@ -98,6 +137,14 @@ h3 {
   border: 1px solid #d7ddd8;
   border-radius: 8px;
   color: #22312d;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.icon-button:hover,
+.filter-button:hover,
+.small-action:hover {
+  border-color: #98cabb;
+  transform: translateY(-1px);
 }
 
 .icon-button {
@@ -152,10 +199,13 @@ h3 {
 
 .demo-readiness {
   align-items: start;
-  background: #ffffff;
-  border: 1px solid #dce2dd;
+  background:
+    linear-gradient(135deg, rgba(29, 43, 40, 0.98), rgba(39, 93, 82, 0.94)),
+    #1d2b28;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  box-shadow: 0 14px 44px rgba(42, 50, 46, 0.08);
+  box-shadow: 0 24px 70px rgba(29, 43, 40, 0.24);
+  color: #ffffff;
   display: grid;
   gap: 14px;
   grid-template-columns: minmax(240px, 1fr) minmax(260px, 1fr) minmax(240px, 0.85fr) minmax(260px, 1fr);
@@ -170,12 +220,13 @@ h3 {
 }
 
 .demo-copy h2 {
-  font-size: 1.08rem;
+  color: #ffffff;
+  font-size: 1.18rem;
   line-height: 1.2;
 }
 
 .demo-copy p:not(.eyebrow) {
-  color: #5a6863;
+  color: #d4ddd8;
   font-size: 0.88rem;
   line-height: 1.4;
 }
@@ -193,8 +244,8 @@ h3 {
 }
 
 .company-link-card {
-  background: #f7f8f4;
-  border: 1px solid #dfe5df;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   display: grid;
   gap: 10px;
@@ -211,8 +262,8 @@ h3 {
 }
 
 .link-stack div {
-  background: #ffffff;
-  border: 1px solid #e0e5df;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 8px;
   display: grid;
   gap: 2px;
@@ -281,10 +332,10 @@ h3 {
 }
 
 .demo-button {
-  background: #f7f8f4;
-  border: 1px solid #d5ddd7;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 8px;
-  color: #22312d;
+  color: #ffffff;
   font-size: 0.82rem;
   font-weight: 850;
   min-height: 38px;
@@ -292,7 +343,8 @@ h3 {
 }
 
 .demo-button:hover {
-  border-color: #24786b;
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.34);
 }
 
 .demo-button.reset {
@@ -308,10 +360,10 @@ h3 {
 
 .check-item {
   align-items: center;
-  background: #fbfcfa;
-  border: 1px solid #e0e5df;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
-  color: #53615c;
+  color: #d4ddd8;
   display: flex;
   font-size: 0.78rem;
   font-weight: 800;
@@ -326,8 +378,8 @@ h3 {
 }
 
 .check-item.done {
-  background: #e8f4ef;
-  border-color: #c7dfd4;
+  background: rgba(232, 244, 239, 0.95);
+  border-color: rgba(199, 223, 212, 0.96);
   color: #176858;
 }
 
@@ -360,10 +412,10 @@ h3 {
 
 .booking-panel,
 .dashboard-panel {
-  background: #ffffff;
-  border: 1px solid #dce2dd;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(220, 226, 221, 0.95);
   border-radius: 8px;
-  box-shadow: 0 14px 44px rgba(42, 50, 46, 0.08);
+  box-shadow: 0 18px 58px rgba(42, 50, 46, 0.1);
   padding: 18px;
 }
 
@@ -373,10 +425,10 @@ h3 {
 }
 
 .status-pill {
-  background: #e8f4ef;
-  border: 1px solid #c7dfd4;
+  background: #102b27;
+  border: 1px solid rgba(248, 212, 122, 0.45);
   border-radius: 999px;
-  color: #166b5f;
+  color: #f8d47a;
   font-size: 0.8rem;
   font-weight: 800;
   gap: 6px;
@@ -455,7 +507,7 @@ h3 {
 
 .trade-button {
   align-items: center;
-  background: #f7f8f4;
+  background: #ffffff;
   border: 1px solid #dfe4de;
   border-radius: 8px;
   color: #34413c;
@@ -469,6 +521,7 @@ h3 {
 .trade-button.active {
   background: color-mix(in srgb, var(--accent) 12%, white);
   border-color: var(--accent);
+  box-shadow: 0 10px 22px rgba(36, 120, 107, 0.12);
   color: var(--accent);
   font-weight: 850;
 }
@@ -593,7 +646,7 @@ select:focus {
 }
 
 .quote-strip {
-  background: #1d2b28;
+  background: linear-gradient(135deg, #182420, #263a36);
   border-radius: 8px;
   color: #ffffff;
   display: grid;
@@ -622,7 +675,7 @@ select:focus {
 }
 
 .primary-action {
-  background: #24786b;
+  background: linear-gradient(135deg, #24786b, #166b5f);
   border: 0;
   border-radius: 8px;
   color: #ffffff;
@@ -635,13 +688,17 @@ select:focus {
   width: 100%;
 }
 
+.primary-action:hover {
+  background: linear-gradient(135deg, #2f8a7c, #176858);
+}
+
 .metric-row {
   gap: 10px;
   margin-bottom: 14px;
 }
 
 .metric {
-  background: #f7f8f4;
+  background: #ffffff;
   border: 1px solid #dfe5df;
   border-radius: 8px;
   display: grid;
@@ -649,6 +706,12 @@ select:focus {
   gap: 7px;
   min-height: 96px;
   padding: 12px;
+}
+
+.metric:hover,
+.booking-card:hover,
+.selected-job {
+  box-shadow: 0 12px 30px rgba(42, 50, 46, 0.1);
 }
 
 .metric svg {
@@ -875,13 +938,15 @@ select:focus {
   grid-template-columns: 1fr;
   padding: 14px;
   text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
   width: 100%;
 }
 
 .booking-card:hover,
 .selected-job {
   border-color: #24786b;
-  box-shadow: 0 0 0 3px rgba(36, 120, 107, 0.1);
+  box-shadow: 0 0 0 3px rgba(36, 120, 107, 0.1), 0 12px 30px rgba(42, 50, 46, 0.1);
+  transform: translateY(-1px);
 }
 
 .job-id {
@@ -952,7 +1017,7 @@ select:focus {
 }
 
 .work-order {
-  background: #f7f8f4;
+  background: linear-gradient(180deg, #f9faf6, #f0f3ed);
   border: 1px solid #dfe5df;
   border-radius: 8px;
   display: grid;

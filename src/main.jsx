@@ -759,11 +759,17 @@ function App() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <div>
-          <p className="eyebrow">TradeFlow Scheduler</p>
-          <h1>Service booking, pricing, dispatch, and follow-up</h1>
+        <div className="brand-lockup">
+          <div className="brand-mark">
+            <CalendarClock size={24} />
+          </div>
+          <div>
+            <p className="eyebrow">Archonic Scheduler</p>
+            <h1>AI-assisted booking and dispatch for service contractors</h1>
+          </div>
         </div>
         <div className="topbar-actions">
+          <span className="topbar-badge">Demo MVP</span>
           <button
             className={`icon-button ${openHeaderPanel === "notifications" ? "active-icon" : ""}`}
             aria-label="Notifications"
@@ -802,7 +808,7 @@ function App() {
       {isDemoHub && <section className="demo-readiness" aria-label="Demo readiness">
         <div className="demo-copy">
           <p className="eyebrow">Demo mode</p>
-          <h2>Ready to show the workflow without spending on live services</h2>
+          <h2>Run a polished contractor walkthrough in under a minute</h2>
           <p>
             Use the presets to run a clean walkthrough: customer request, company review, dispatch,
             confirmation, and printable work order.
